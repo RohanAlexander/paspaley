@@ -22,23 +22,54 @@ the_data$price <- str_replace_all(the_data$price, c("AUD " =  "", "," = "")) %>%
 
 
 # Fix SKU
-the_data$sku <- str_replace_all(the_data$sku, c("SKU    " =  "")) # The 2018 ones actually start with SKU...
+the_data$sku <- str_replace_all(the_data$sku, c("SKU    " =  "")) # The 2018 ones actually start with "SKU" but we just want the number
 
 
 # Identify the collection
+# First start by using the collections in the website
+links_by_collection_2018 <- read_csv("outputs/misc/2018_links_from_collections.csv")
+links_by_collection_2017 <- read_csv("outputs/misc/2017_links_from_collections.csv")
+links_by_collection <- rbind(links_by_collection_2017, links_by_collection_2018) %>% 
+  select(collection, product, year)
+rm(links_by_collection_2017, links_by_collection_2018)
+
 the_data <- the_data %>% 
-  mutate(collection = case_when(
-    str_detect(product, "kimberley") ~ "Kimberley",
-    str_detect(product, "lavalier") ~ "Lavalier",
-    str_detect(product, "maxima") ~ "Maxima",
-    str_detect(product, "monsoon") ~ "Monsoon",
-    str_detect(product, "pearls-my-way") ~ "Pearls My Way",
-    str_detect(product, "rockpool") ~ "Rockpool",
-    str_detect(product, "strand") ~ "Strand",
-    str_detect(product, "touchstone") ~ "Touchstone",
-    TRUE ~ "Other"
+  mutate(for_matching = str_replace_all(product, c("pearl-accessories-" = "",
+                                                   "pearl-bracelets-" = "",
+                                                   "pearl-clasps-" = "",
+                                                   "pearl-earrings-" = "",
+                                                   "pearl-necklaces-" = "",
+                                                   "pearl-rings-" = "")))
+
+the_data <- the_data %>% 
+  left_join(links_by_collection, by = c("year" = "year",
+                                        "for_matching" = "product"))
+
+
+rm(links_by_collection)
+
+# Now, by looking at the content if it wasn't identified already
+the_data <- the_data %>% 
+  mutate(collection_brute_force = case_when(
+    str_detect(product, "kimberley") ~ "kimberley",
+    str_detect(product, "lavalier") ~ "lavalier",
+    str_detect(product, "maxima") ~ "maxima",
+    str_detect(product, "monsoon") ~ "monsoon",
+    str_detect(product, "pearls-my-way") ~ "pearls_my_way",
+    str_detect(product, "rockpool") ~ "rockpool",
+    str_detect(product, "strand") ~ "strand",
+    str_detect(product, "gold-keshi-rhapsody") ~ "strand", # outlier
+    str_detect(product, "touchstone") ~ "touchstone",
+    TRUE ~ "other"
     ))
 
+
+the_data <- the_data %>% 
+  mutate(collection = if_else(is.na(collection), collection_brute_force, collection)) %>% 
+  select(-collection_brute_force) 
+
+the_data$collection[the_data$collection == "pearls_my_way"] <- "Pearls My Way"
+the_data$collection <- str_to_title(the_data$collection , locale = "en")
 
 # Identify whether keshi pearl
 the_data <- the_data %>% 
@@ -66,9 +97,20 @@ the_data <- the_data %>%
   ))
 
 
-# Type
+# Category
+# Again, as before, looking at the website content first
+links_by_categories_2018 <- read_csv("outputs/misc/2018_links_from_categories.csv")
+links_by_categories_2017 <- read_csv("outputs/misc/2017_links_from_categories.csv")
+links_by_categories <- rbind(links_by_categories_2017, links_by_categories_2018) %>% 
+  select(category, product, year)
+rm(links_by_categories_2017, links_by_categories_2018)
+
 the_data <- the_data %>% 
-  mutate(type = case_when(
+  left_join(links_by_categories, by = c("year" = "year",
+                                        "for_matching" = "product"))
+
+the_data <- the_data %>% 
+  mutate(category_brute_force = case_when(
     str_detect(product, "accessories") ~ "Accessory",
     str_detect(product, "bracelets") ~ "Bracelet",
     str_detect(product, "clasps") ~ "Clasp",
@@ -81,6 +123,16 @@ the_data <- the_data %>%
     str_detect(product, "keshi-rope-strand-of-the-harvest") ~ "Necklace",
     TRUE ~ "Other"
   ))
+
+the_data <- the_data %>% 
+  mutate(category = if_else(is.na(category), category_brute_force, category)) %>% 
+  select(-category_brute_force) 
+
+the_data$category[the_data$category == "necklaces_and_pendants"] <- "Necklaces and Pendants"
+the_data$category[the_data$category == "Necklace"] <- "Necklaces and Pendants"
+the_data$category[the_data$category == "necklaces"] <- "Necklaces and Pendants"
+
+the_data$category <- str_to_title(the_data$category , locale = "en")
 
 # Fix typos and inconsistencies
 the_data$description <- str_replace_all(the_data$description, "in18kt", "in 18kt")
@@ -105,6 +157,7 @@ the_data$description <- str_replace_all(the_data$description, "ninty", "ninety")
 the_data$description <- str_replace_all(the_data$description, "Introducing Pearls My Way\\. Tailor your look by choosing your preferred Australian South Sea pearls and earring hooks in your favourite shade of gold. Add some colour to your earrings with a variety of precious gemstones including rubies and diamonds\\. Prefer to create your own Pearls My Way earrings\\? Contact the Personal Shopper or visit your nearest boutique. Personal Shopper Recommendation:", "")
 the_data$description <- str_replace_all(the_data$description, "Introducing Pearls My Way\\. Tailor your look by choosing your preferred Australian South Sea pearls and earring hooks in your favourite shade of gold\\. Add some colour to your earrings with a variety of precious gemstones including rubies and diamonds\\. Prefer to create your own Pearls My Way earrings\\? Contact Personal Shopper or visit your nearest boutique\\. Personal Shopper Recommendation:", "")
 
+the_data <- the_data[-160,] # For some reason Odyssey Swap is in there twice for 2017.
 
 # Pearl type
 triangle pearl

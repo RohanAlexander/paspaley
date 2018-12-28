@@ -15,7 +15,10 @@ get_links <- function(file_to_look_at){
   text <- content %>%
     html_text(trim = TRUE)
   
-  return(tibble(link = link, text = text))
+  collection <- str_replace(file_to_look_at, "inputs/2018/lists/lists_by_collection/", "") %>% 
+    str_replace(".htm", "")
+  
+  return(tibble(link = link, text = text, collection = collection))
 }
 
 
@@ -33,4 +36,14 @@ the_files <- c(
 the_data <- purrr::map_df(the_files, get_links)
 
 
-write_csv(the_data, "outputs/2018_links_from_collections.csv")
+the_data <- the_data %>% 
+  mutate(product = str_replace_all(link, c("https://www.paspaley.com/pearl-collections/the-kimberley-bracelet/" = "",
+                                           "https://www.paspaley.com/pearl-collections/lavalier/" = "",
+                                           "https://www.paspaley.com/pearl-collections/maxima/" = "",
+                                           "https://www.paspaley.com/pearl-collections/monsoon/" = "",
+                                           "https://www.paspaley.com/pearl-collections/rockpool/" = "",
+                                           "https://www.paspaley.com/pearl-collections/strands/" = "",
+                                           "https://www.paspaley.com/pearl-collections/touchstone/" = "")),
+         year = 2018)
+
+write_csv(the_data, "outputs/misc/2018_links_from_collections.csv")
