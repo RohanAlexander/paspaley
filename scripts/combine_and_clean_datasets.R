@@ -160,7 +160,26 @@ the_data$description <- str_replace_all(the_data$description, "Introducing Pearl
 the_data <- the_data[-160,] # For some reason Odyssey Swap is in there twice for 2017.
 
 # Pearl type
-triangle pearl
+the_data <- the_data %>% 
+  mutate(description_lowered = str_to_lower(description)) %>% 
+  mutate(pearl_type = case_when(
+    str_detect(description_lowered, "mother-of-pearl") ~ "Mother of pearl",
+    str_detect(description_lowered, "mother of pearl") ~ "Mother of pearl",
+    str_detect(description_lowered, "triangle pearl") ~ "Triangle",
+    str_detect(description_lowered, "round pearl") ~ "Round",
+    str_detect(description_lowered, "button pearl") ~ "Button",
+    str_detect(description_lowered, "semi-round pearl") ~ "Semi-round",
+    str_detect(description_lowered, "drop pearl") ~ "Drop",
+    str_detect(description_lowered, "circle pearl") ~ "Circle",
+    str_detect(description_lowered, "oval pearl") ~ "Oval",
+    str_detect(description_lowered, "round australian south sea pearl") ~ "Round",
+    str_detect(description_lowered, "round paspaley pearls") ~ "Round",
+    str_detect(description_lowered, "oval drop australian south sea pearls") ~ "Oval",
+    str_detect(description_lowered, "oval australian south sea pearl") ~ "Oval",
+    str_detect(description_lowered, "button australian south sea pearl") ~ "Button",
+    TRUE ~ "Unsure"
+  )) %>% 
+  select(-description_lowered)
 
 # Save the data
 write_csv(the_data, "outputs/data/cleaned_dataset.csv")
