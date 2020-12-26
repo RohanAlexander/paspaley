@@ -2,15 +2,20 @@ library(tidyverse)
 
 
 # Read in the datasets
-the_2018_data <- read_csv("outputs/data/2018_dataset.csv")
 the_2017_data <- read_csv("outputs/data/2017_dataset.csv")
-
+the_2018_data <- read_csv("outputs/data/2018_dataset.csv")
+the_2019_data <- read_csv("outputs/data/2019_dataset.csv")
+the_2020_data <- read_csv("outputs/data/2020_dataset.csv")
 
 # Combine the datasets
-the_2018_data$year = 2018
 the_2017_data$year = 2017
-the_data <- rbind(the_2017_data, the_2018_data)
-rm(the_2017_data, the_2018_data)
+the_2018_data$year = 2018
+the_2019_data$year = 2019
+the_2020_data$year = 2020
+
+the_data <- 
+  rbind(the_2017_data, the_2018_data, the_2019_data, the_2020_data)
+rm(the_2017_data, the_2018_data, the_2019_data, the_2020_data)
 
 
 # Fix price
@@ -24,17 +29,24 @@ the_data$price <- str_replace_all(the_data$price, c("AUD " =  "", "," = "")) %>%
 # Fix SKU
 the_data$sku <- str_replace_all(the_data$sku, c("SKU    " =  "")) # The 2018 ones actually start with "SKU" but we just want the number
 
+# 
 
 # Identify the collection
 # First start by using the collections in the website
+links_by_collection_2019 <- read_csv("outputs/misc/2019_links_from_collections.csv")
 links_by_collection_2018 <- read_csv("outputs/misc/2018_links_from_collections.csv")
 links_by_collection_2017 <- read_csv("outputs/misc/2017_links_from_collections.csv")
-links_by_collection <- rbind(links_by_collection_2017, links_by_collection_2018) %>% 
+links_by_collection <- 
+  rbind(links_by_collection_2017, 
+        links_by_collection_2018, 
+        links_by_collection_2019) %>% 
   select(collection, product, year)
-rm(links_by_collection_2017, links_by_collection_2018)
+rm(links_by_collection_2017, 
+   links_by_collection_2018, 
+   links_by_collection_2019)
 
 the_data <- the_data %>% 
-  mutate(for_matching = str_replace_all(product, c("pearl-accessories-" = "",
+  mutate(name_for_matching = str_replace_all(product, c("pearl-accessories-" = "",
                                                    "pearl-bracelets-" = "",
                                                    "pearl-clasps-" = "",
                                                    "pearl-earrings-" = "",
@@ -43,7 +55,7 @@ the_data <- the_data %>%
 
 the_data <- the_data %>% 
   left_join(links_by_collection, by = c("year" = "year",
-                                        "for_matching" = "product"))
+                                        "name_for_matching" = "product"))
 
 
 rm(links_by_collection)
@@ -54,6 +66,7 @@ the_data <- the_data %>%
     str_detect(product, "kimberley") ~ "kimberley",
     str_detect(product, "lavalier") ~ "lavalier",
     str_detect(product, "maxima") ~ "maxima",
+    str_detect(product, "megisti") ~ "megisti",
     str_detect(product, "monsoon") ~ "monsoon",
     str_detect(product, "pearls-my-way") ~ "pearls_my_way",
     str_detect(product, "rockpool") ~ "rockpool",
@@ -63,6 +76,7 @@ the_data <- the_data %>%
     TRUE ~ "other"
     ))
 
+the_data$product <- str_replace(the_data$product, "pavé", "pave")
 
 the_data <- the_data %>% 
   mutate(collection = if_else(is.na(collection), collection_brute_force, collection)) %>% 
@@ -70,6 +84,8 @@ the_data <- the_data %>%
 
 the_data$collection[the_data$collection == "pearls_my_way"] <- "Pearls My Way"
 the_data$collection <- str_to_title(the_data$collection , locale = "en")
+
+the_data$collection <- str_remove(the_data$collection , ".htm")
 
 # Identify whether keshi pearl
 the_data <- the_data %>% 
@@ -99,24 +115,37 @@ the_data <- the_data %>%
 
 # Category
 # Again, as before, looking at the website content first
+links_by_categories_2019 <- read_csv("outputs/misc/2019_links_from_categories.csv")
+links_by_categories_2019$year <- 2019
 links_by_categories_2018 <- read_csv("outputs/misc/2018_links_from_categories.csv")
 links_by_categories_2017 <- read_csv("outputs/misc/2017_links_from_categories.csv")
-links_by_categories <- rbind(links_by_categories_2017, links_by_categories_2018) %>% 
+links_by_categories <- 
+  rbind(links_by_categories_2017, 
+        links_by_categories_2018, 
+        links_by_categories_2019) %>% 
   select(category, product, year)
-rm(links_by_categories_2017, links_by_categories_2018)
+rm(links_by_categories_2017, links_by_categories_2018, links_by_categories_2019)
+
+links_by_categories$category <- str_remove(links_by_categories$category, ".htm")
+
+links_by_categories$category %>% unique()
 
 the_data <- the_data %>% 
   left_join(links_by_categories, by = c("year" = "year",
-                                        "for_matching" = "product"))
+                                        "name_for_matching" = "product"))
 
 the_data <- the_data %>% 
   mutate(category_brute_force = case_when(
-    str_detect(product, "accessories") ~ "Accessory",
-    str_detect(product, "bracelets") ~ "Bracelet",
-    str_detect(product, "clasps") ~ "Clasp",
+    str_detect(product, "accessories") ~ "Accessories",
+    str_detect(product, "bracelets") ~ "Bracelets",
+    str_detect(product, "bracelet") ~ "Bracelets",
+    str_detect(product, "clasps") ~ "Clasps",
+    str_detect(product, "clasp") ~ "Clasps",
     str_detect(product, "earrings") ~ "Earrings",
     str_detect(product, "necklaces") ~ "Necklace",
-    str_detect(product, "rings") ~ "Ring",
+    str_detect(product, "necklace") ~ "Necklace",
+    str_detect(product, "ring") ~ "Rings",
+    str_detect(product, "rings") ~ "Rings",
     str_detect(product, "petite-circle-strand") ~ "Necklace",
     str_detect(product, "baroque-strand") ~ "Necklace",
     str_detect(product, "gold-keshi-rhapsody") ~ "Necklace",
@@ -131,6 +160,10 @@ the_data <- the_data %>%
 the_data$category[the_data$category == "necklaces_and_pendants"] <- "Necklaces and Pendants"
 the_data$category[the_data$category == "Necklace"] <- "Necklaces and Pendants"
 the_data$category[the_data$category == "necklaces"] <- "Necklaces and Pendants"
+the_data$category[the_data$category == "Bracelet"] <- "Bracelets"
+the_data$category[the_data$category == "bracelet"] <- "bracelets"
+
+the_data$category[the_data$sku == "A19B02W"]
 
 the_data$category <- str_to_title(the_data$category , locale = "en")
 
@@ -157,7 +190,10 @@ the_data$description <- str_replace_all(the_data$description, "ninty", "ninety")
 the_data$description <- str_replace_all(the_data$description, "Introducing Pearls My Way\\. Tailor your look by choosing your preferred Australian South Sea pearls and earring hooks in your favourite shade of gold. Add some colour to your earrings with a variety of precious gemstones including rubies and diamonds\\. Prefer to create your own Pearls My Way earrings\\? Contact the Personal Shopper or visit your nearest boutique. Personal Shopper Recommendation:", "")
 the_data$description <- str_replace_all(the_data$description, "Introducing Pearls My Way\\. Tailor your look by choosing your preferred Australian South Sea pearls and earring hooks in your favourite shade of gold\\. Add some colour to your earrings with a variety of precious gemstones including rubies and diamonds\\. Prefer to create your own Pearls My Way earrings\\? Contact Personal Shopper or visit your nearest boutique\\. Personal Shopper Recommendation:", "")
 
-the_data <- the_data[-160,] # For some reason Odyssey Swap is in there twice for 2017.
+# For some reason some are still duplicated
+the_data <- 
+  the_data %>% 
+  distinct(sku, year, .keep_all = TRUE)
 
 # Pearl type
 the_data <- the_data %>% 
@@ -180,6 +216,58 @@ the_data <- the_data %>%
     TRUE ~ "Unsure"
   )) %>% 
   select(-description_lowered)
+
+# Combine the description and the flowery description (2018 has the split, but 2017 doesn't)
+the_data <- the_data %>% 
+  unite(description, description, flowerydescription, sep = " ") 
+
+
+# Change Bespoke to "Pearls My Way"
+the_data$collection[the_data$collection == "Bespoke"] <- "Pearls My Way"
+
+# Check if any SKU is changing collection or category
+the_data %>% 
+  select(sku, collection) %>% 
+  distinct() %>% 
+  group_by(sku) %>% 
+  count() %>% 
+  filter(n>1)
+
+the_data %>% 
+  filter(sku %in% c("DC16E10WPQ14", "DC16E10YPO12", "DC18P04YPO13", "DC18P06YPR12", "DC19E08WPC12", "DC19E14YPR12")
+         )
+
+
+the_data$collection[the_data$sku %in% c("DC16E10WPQ14", "DC16E10YPO12", 
+                                        "DC18P04YPO13", "DC18P06YPR12", 
+                                        "DC19E08WPC12", "DC19E14YPR12")] <- "Touchstone"
+
+  
+check <- 
+  the_data %>% 
+  select(sku, category) %>% 
+  distinct() %>% 
+  group_by(sku) %>% 
+  count() %>% 
+  filter(n>1) %>% 
+  pull(sku)
+
+check_me <- the_data %>% 
+  filter(sku %in% check) %>% 
+  arrange(sku) %>% 
+  select(product, year, category, sku)
+
+the_data$category %>% table()
+
+the_data$category[the_data$sku == "C00L01YPR15"] <- "Clasps"
+
+the_data$category[the_data$sku %in% c("DH13N01W83C", "DH13N01Y83C", "DH14N20WC", 
+                                      "DH14N20YC", "DH16N01RC", "SCPC1012138", 
+                                      "W18N06R")] <- "Necklaces And Pendants"
+
+the_data$category[the_data$sku %in% c("W18E06R", "DW18E05RPR13")] <- "Earrings"
+
+
 
 # Save the data
 write_csv(the_data, "outputs/data/cleaned_dataset.csv")

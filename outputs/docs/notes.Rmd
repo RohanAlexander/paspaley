@@ -1,43 +1,83 @@
 ---
-title: "One weird trick to get 33% off Paspaley"
+title: "Gathering and tidying data from Paspaley"
 author: "Rohan"
-date: "01/01/2019"
+date: "25 February 2019"
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
+library(scales)
+
 # Read in the data
 the_data <- read_csv("../data/cleaned_dataset.csv")
+price_comparison <- read_csv("../data/price_comparison.csv")
 ```
 
-# Overview
-I scraped the Paspaley website on Boxing Day 2017 and again on Boxing Day 2018. There's a bunch of interesting aspects going on, but the one that stands out the most is the 33% price reduction in the XX.
-
-
 # Introduction
-Paspaly make the best pearl jewelry in the world. Unfortunately it's priced accordingly so actual Paspaley purchases are somewhat rare for me, but isn't half the fun of luxury products comtemplating them? That said, there's only so much time that I could spend looking at photos of pearls before I began to wonder about their pricing strategy, so I scraped the website on Boxing Day 2017, and again on Boxing Day 2018. After cleaning the data we can have a bit of a look at what's going on.
+Paspaly make the best pearl jewelry in the world. Unfortunately it's priced accordingly so actual Paspaley purchases are somewhat rare for me and I wondered if we could do some analysis. So I scraped the website on Boxing Day 2017 and again on Boxing Day 2018 which means we can have a bit of a look at what's going on.
 
-The nice aspect of this project is that it's a small-scale project that showcases a variety of data skills that I use in my academic life, but that rarely make it to the final paper such as: acquisition; cleaning; analysis; and communication. In this write-up I'm going to explain each step so that you can do you own analysis of a similar type. If you'd just like to see the project folder then it's available on my GitHub page: https://github.com/RohanAlexander/paspaley. Note that I haven't included the scraped html files there but if there's something in the html that you think I haven't taken advantage of then let me know and I can update the scripts.
+If you'd just like to see the project folder then it's available at:https://github.com/RohanAlexander/paspaley. To be respectful of Paspaley's content, I haven't included the scraped html files there, but if you look at the Paspaley website and think there could be something in the html that I haven't taken advantage of then let me know and I can update the scripts.
 
 
 # Data acquisition
-There was an update to the Paspaly website at some point in the year where they moved away from Shopify. So I'll just focus on the most recent version of the website here. The first step when acquiring data from a website is to check for an API. In this case, it doesn't look like they have one. The next step is to look at the relevant robot.txt file: https://www.paspaley.com/robots.txt. In this case it doesn't give us much information, but it helpfully provides a link to the XML sitemap: https://www.paspaley.com/pub/sitemap.xml.
+## Method 1 - XML-based sitemap
+There was an update to the Paspaly website at some point in 2018 where they moved away from Shopify. So I'll just focus on the most recent version of the website here, but the overall process is similar for both years. We don't want to impact the ability of their website to serve other visitors, so the first step when acquiring data from a website is to check for an API. In this case, it doesn't look like they have one. The next step is to look at the relevant robot.txt file in case they provide some guidance there: https://www.paspaley.com/robots.txt. In this case it doesn't give us much information, but it helpfully provides a link to the XML sitemap: https://www.paspaley.com/pub/sitemap.xml.
 
-```{r, echo=FALSE}
+```{r, echo=FALSE, fig.cap="Screnshot of the XML file that Paspaley makes available of their sitemap."}
 knitr::include_graphics("images/sitemap.png")
 ```
 
-That appears to give us a nice list of the products on the website and their address so that we can get their details.
+That gives us a nice list of the products on the website and their address so that we can get details such as prices. We can use the rvest package to quickly grab the relevant information from this file. 
 
-We can use the R package rvest to quickly grab the relevant information from this file. 
+```{r getListsOfProductsFromXML, include = TRUE, eval = FALSE}
+library(rvest)
+library(tidyverse)
 
-**ADD R SCRIPT.**
+content <- read_html("inputs/2018/sitemap.xml")
 
-Although the sitemap should be giving us everything, it's worth seeing if we can follow the links to get any other information that's missing.
+each_product <- content %>%
+  xml_find_all("//url") # Instead of HTML/CSS here we're using XML. It's fairly similar, but just a slightly different syntax. Each product is within a url tag.
 
-Looking at the website, Paspaley organises the products by category (e.g. bracelet, earrings, etc) and also by collection (e.g. Monsoon, Rockpool, etc). Save each of those pages and we can then scrape the links for each of the individual products from them using 
+# Thanks to Jenny Bryan https://github.com/jennybc/manipulate-xml-with-purrr-dplyr-tidyr
+all_products <- data_frame(row = seq_along(each_product), # This just adds a row numbering which makes it easier to go back and check.
+                      nodeset = each_product) # Now we're pulling the relevant XML for each product into a new column. So for each product (row) the relevant nodes will be in that column.
+
+# Thanks to James Goldie https://rensa.co/writing/drilling-into-non-rectangular-data-with-purrr/
+all_products <- all_products %>% 
+  mutate(product_link = nodeset %>% # We're first trying to get the URL for each product
+           html_node("loc") %>%
+           html_text(trim = TRUE)) %>% 
+  mutate(product_name_existence_test = nodeset %>% # There's a bunch of URLs that aren't products so we want to test for whether there's a name first
+           html_node("image")) %>% 
+  filter(!is.na(product_name_existence_test)) %>% # Drop it if not a product
+  mutate(product_name = nodeset %>% # Grab the name of the product
+           html_node("image") %>% 
+           html_node("title") %>% 
+           html_text(trim = TRUE)) %>% 
+  select(-product_name_existence_test, -nodeset)
+
+write_csv(all_products, "outputs/misc/2018_links_from_xml.csv")
+```
+
+Although the sitemap should be giving us everything, it's worth seeing if we can use a different method to get any other information that's missing. And we'll also use this alternative information to allocate collections and categories to the products.
+
+
+## Method 2 - By collection/category
+Looking at the website, Paspaley organises the products by category (e.g. bracelet, earrings, etc).
+
+```{r, echo=FALSE, fig.cap="Screnshot of the categories page."}
+knitr::include_graphics("images/category.png")
+```
+
+It also categorises them by collection (e.g. Monsoon, Rockpool, etc). 
+
+```{r, echo=FALSE, fig.cap="Screnshot of the collections page."}
+knitr::include_graphics("images/collection.png")
+```
+
+Save each of those summary pages and we can then scrape the links for each of the individual products from them using rvest.
 
 
 ```{r getListsOfProducts, include = TRUE, eval = FALSE}
@@ -45,7 +85,7 @@ library(purrr)
 library(rvest)
 library(tidyverse)
 
-
+# We're doing it properly and writing a function. We'll pass that function, and a list of files on which to apply it, to purrr.
 get_links <- function(file_to_look_at){
   content <- read_html(file_to_look_at) %>% 
     html_nodes(".product-item-info") %>% 
@@ -94,7 +134,7 @@ write_csv(the_data, "outputs/misc/2018_links_from_collections.csv")
 
 You can use a similar script to get the categories. Comparing the two indicates that the XML had a handful of products that were not part of a collection or a category, but not vice versa, so no worries.
 
-Now that we have the list of the products that we'd like details about, we need to get the the page for each product. 
+Now that we have the list of the products that we'd like details about, we need to download the page for each product. 
 
 ```{r downloadPageForEachProduct, include = TRUE, eval = FALSE}
 library(rvest)
@@ -124,6 +164,10 @@ for (i in 1:length(the_data$link)) {
 # Clean up
 rm(i, name_of_file, product_data, product_name)
 ```
+
+I've spaced out the requests by 60 seconds here. Again this is just about trying to not affect the performance of their site for other visitors. I'm not in a hurry for this project, so I just slow down the requests a fair bit. In this case there were only a few hundred pages, so it was just a matter of setting the computer to run while I was busy with lunch. Not a big deal. Also, I haven't accounted for page errors, which would pause the script, like I would with a full-scale project. The way to do that is to change the scraper to a function and then to use safely on it. See upcoming blog about RBA minutes for an example.
+
+Now that we have saved the pages for each product and we don't need to bother their website anymore we can get to organising the content into a dataset.
 
 
 # Data cleaning
@@ -367,7 +411,7 @@ the_data <- the_data %>%
 
 ```
 
-Finally, in anything that is written there are always typos and mistakes that fresh eyes notice, but that the author could read a thousand times and miss. So we'd like to fix a bit of the website content, so that they don't continue into our dataset (instead we can make new mistakes!).
+Finally, in anything that is written there are always typos and mistakes that fresh eyes notice, but that the author could read a thousand times and miss. So we'd like to fix a bit of the website content, so that they don't continue into our dataset.
 
 ```{r CleanDataframeTypos, include = TRUE, eval = FALSE}
 # Fix typos and inconsistencies
@@ -395,12 +439,17 @@ the_data$description <- str_replace_all(the_data$description, "Introducing Pearl
 
 the_data <- the_data[-160,] # For some reason Odyssey Swap is in there twice for 2017. I know you're not meant to do the removal this way, but here we are.
 
+# Combine the description and the flowery description (2018 has the split, but 2017 doesn't)
+the_data <- the_data %>% 
+  unite(description, description, flowerydescription, sep = " ") 
+
 # Save the data
 write_csv(the_data, "outputs/data/cleaned_dataset.csv")
 ```
 
 
 # Data analysis
+## Number of products
 This is just a 'fun' analysis - we don't have all the data (only what they put on the website). If you just want the cleaned dataset then you can get it here: https://github.com/RohanAlexander/paspaley/blob/master/outputs/data/cleaned_dataset.csv
 
 The first thing that jumps out is that the number of items on the website has decreased from 276 in 2017 to 179 in 2018. 
@@ -422,9 +471,9 @@ the_data %>%
 
 Lavalier has also decreased from 27 to 10. Comparing the website at 2017 with 2018, it's clear that they've changed they way they are presenting Lavalier from jewelry that was sold as it was, to something that is customised by the customer (i.e. choosing the pearl etc). Strand and Pearls My Way also seem to have decreased a little, but those two were always a little less amenable to this type of analysis. Strand just because they understandably don't really put much on their website about the pearl strands, and Pearls My Way, because it's meant to be customised.
 
-In general, it's clear that Paspaley has changed how they are using their website. It's gone from acting as a place of commerce (e.g. being able to buy gift vouchers on it) to being something that feels more about allowing people to engage with the brand in a less financial way, perhaps as a complement to their Instagram account, but you still go into the stores when you want to buy.
+Maybe Paspaley has changed how they are using their website? Perhaps it has gone from acting as a place of commerce (e.g. being able to buy gift vouchers on it) to being something that feels more about allowing people to engage with the brand in a less financial way, perhaps as a complement to their Instagram account, but you still go into the stores when you want to buy.
 
-Based on the SKUs, there are 77 products that are on the 2017 and 2018 versions of the website. 
+Based on having identical SKUs, there are 77 products that are on the 2017 and 2018 versions of the website. 
 
 ```{r, include = TRUE}
 product_in_both_years <- the_data %>% 
@@ -433,7 +482,7 @@ product_in_both_years <- the_data %>%
   spread(key = year, value = price) %>% 
   rename(price_in_2017 = `2017`, price_in_2018 = `2018`) %>% 
   filter(!is.na(price_in_2018) & !is.na(price_in_2017)) %>% 
-  left_join(the_data[the_data$year == 2018,]) %>% 
+  left_join(the_data[the_data$year == 2018,], by = "sku") %>% 
   select(sku, product, collection, category) %>% 
   ungroup()
 
@@ -446,19 +495,20 @@ product_in_both_years %>%
 
 The most common category of product to be on the website in both years is necklaces and pendants, followed by earrings. The distribution between the collections is also surprising, with other being the most popular, but Maxima and Rockpool being next.
 
-Even though Paspaley has a lot of products at that it doesn't sell through the website, the prices that are shown on the website are still generally fairly high!
+## Prices
+
+Even though Paspaley has a lot of products at that it doesn't sell through the website, the prices that are shown on the website are still fairly high!
 
 ```{r, include = TRUE}
-library(scales) # Just used to get away from scientific notation in the last line.
 ggplot(data = the_data, aes(x = price, fill = collection)) +
   geom_histogram(binwidth = 1000) +
   facet_wrap(vars(year), nrow = 2) +
   theme_classic() +
   scale_fill_viridis_d() +
-  scale_x_continuous(labels = comma)
+  scale_x_continuous(labels = comma) # The scales library is used here - it just gets away from scientific notation
 ```
 
-There is a large skew - in 2018 there were five products with a price over \$100,000; down from seven in 2017. Interestingly if we focus on products that have a price less than \$50,000 we again see this skew, although at this less expensive (still way too expensive for me) level it's being driven by the 'other' collection These tends to be products such as clasps or chains.
+There is a large skew - in 2018 there were five products with a price over \$100,000; down from seven in 2017. Interestingly if we focus on products that have a price less than \$50,000 we again see this skew, although at this less expensive level it's being driven by the 'other' collection These tends to be products such as clasps or chains.
 
 ```{r, include = TRUE}
 ggplot(data = the_data[the_data$price < 50000,], aes(x = price, fill = collection)) +
@@ -482,7 +532,9 @@ ggplot(data = the_data[the_data$collection != "Other",], aes(x = price, fill = c
 We can use a boxplot to foxus on the distribution by collection.
 
 ```{r, include = TRUE}
-ggplot(data = the_data, aes(collection, log(price))) +
+the_data %>% 
+  filter(!collection %in% c("Pearls My Way", "Strand")) %>% 
+  ggplot(aes(collection, log(price))) +
   geom_boxplot() +
   facet_wrap(vars(year), nrow = 2) +
   theme_classic() 
@@ -490,19 +542,59 @@ ggplot(data = the_data, aes(collection, log(price))) +
 
 In that plot, I've logged the price, which is a little confusing to interpret, allows us to see pretty clearly that the collections are aimed at different price points. For instance, Kimberly being cheaper, Lavalier and Touchstone being moderate, and Maxima and Rockpool being high. The Monsoon collection, which was new in 2018 is at an interesting price point, with a few products being (relatively) cheaper, but most of them being at the high end, even by Paspaley prices. I think that the summary prices for 'Pearls My Way' and 'Strand' are too dependent on what Paspaley has put on the website to be worth going into.
 
+Finally, surprisingly there isn't really too much difference between the average price of different categories, although clasps are surprisingly expensive.
+
 ```{r, include = TRUE}
-ggplot(data = the_data, aes(category, log(price))) +
+the_data %>% 
+  filter(!category %in% c("Other", "Strands")) %>% 
+  ggplot(aes(category, log(price))) +
   geom_boxplot() +
   facet_wrap(vars(year), nrow = 2) +
   theme_classic() 
 ```
 
 
-Price comparisons by collection and by category mean.
+Somewhat surprisingly the average price for many of the collections has decreased slightly in 2018, compared with 2017. For instance, Kimberley from \$2,320 to \$2013 or Touchston from \$11,687 to \$8,258. This decrease in the average is despite an increase in the maximum in many cases. 
 
-Price comparisons by year for those that were in both.
+```{r, include = TRUE}
+the_data %>% 
+  group_by(year, collection) %>% 
+  summarise(average = mean(price) %>% as.integer(),
+            maximum = max(price) %>% as.integer(),
+            minimum = min(price) %>% as.integer(),
+            number = n()
+            ) %>% 
+  filter(collection %in% c("Kimberley", "Lavalier", "Maxima", "Monsoon", "Rockpool", "Touchstone")) 
+```
+
+
+As mentioned earlier, there were 75 products with the same SKU and in both years. This allows us to directly compare the price difference between the years.
+
+```{r, include = TRUE}
+price_comparison %>% 
+  mutate(l_price_in_2017 = log(price_in_2017),
+         l_price_in_2018 = log(price_in_2018)) %>% 
+  ggplot(aes(y = l_price_in_2017, x = l_price_in_2018)) +
+  geom_jitter() +
+  theme_classic() 
+```
+
+
+```{r, include = TRUE}
+price_comparison %>% 
+  arrange(percent_change) %>% 
+  ggplot(aes(y = percent_change, x = 1)) +
+  geom_jitter() +
+  theme_classic() +
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+```
+
+The largest price increase was for the pearl cufflinks which increased from \$2,780 to \$3,280, or roughly 18 per cent. The next largest increase was the Maxima pearl rope necklace in yellow gold which increased by 17 per cent from \$29,800 to \$34,800. Surprisingly there were 30 items that have the same price, and six that actually decreased in price. The product with the largest price decrease were the Rockpool cluster earrings in platinum which decreased by 30 per cent from \$12,800 to be a relative bargain at \$8,800. Of the six products with a price decrease, four of them were Lavalier necklaces and pendants. With the white and yellow gold versions of the of the circle pearl necklace decreasing from \$6,160 to \$5,160 and the petite version also decreasing from \$3,960 to \$3,860.
+
 
 
 
 # Weaknesses
-An obvious weakness of the analysis is that it's just based on what I could find on the website. With a better dataset we could do more interesting analysis and be more confident in our results.
+The main weakness of the analysis is that it's just based on what I could find on the website. With a better dataset we could do more interesting analysis and be more confident in our results.
