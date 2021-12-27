@@ -6,16 +6,18 @@ the_2017_data <- read_csv("outputs/data/2017_dataset.csv")
 the_2018_data <- read_csv("outputs/data/2018_dataset.csv")
 the_2019_data <- read_csv("outputs/data/2019_dataset.csv")
 the_2020_data <- read_csv("outputs/data/2020_dataset.csv")
+the_2021_data <- read_csv("outputs/data/2021_dataset.csv")
 
 # Combine the datasets
 the_2017_data$year = 2017
 the_2018_data$year = 2018
 the_2019_data$year = 2019
 the_2020_data$year = 2020
+the_2021_data$year = 2021
 
 the_data <- 
-  rbind(the_2017_data, the_2018_data, the_2019_data, the_2020_data)
-rm(the_2017_data, the_2018_data, the_2019_data, the_2020_data)
+  rbind(the_2017_data, the_2018_data, the_2019_data, the_2020_data, the_2021_data)
+rm(the_2017_data, the_2018_data, the_2019_data, the_2020_data, the_2021_data)
 
 
 # Fix price
@@ -73,6 +75,7 @@ the_data <- the_data %>%
     str_detect(product, "strand") ~ "strand",
     str_detect(product, "gold-keshi-rhapsody") ~ "strand", # outlier
     str_detect(product, "touchstone") ~ "touchstone",
+    str_detect(product, "dive") ~ "dive",
     TRUE ~ "other"
     ))
 
@@ -86,6 +89,8 @@ the_data$collection[the_data$collection == "pearls_my_way"] <- "Pearls My Way"
 the_data$collection <- str_to_title(the_data$collection , locale = "en")
 
 the_data$collection <- str_remove(the_data$collection , ".htm")
+
+
 
 # Identify whether keshi pearl
 the_data <- the_data %>% 

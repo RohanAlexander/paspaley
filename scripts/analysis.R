@@ -20,12 +20,14 @@ product_in_all_years <-
   rename(price_in_2017 = `2017`, 
          price_in_2018 = `2018`,
          price_in_2019 = `2019`,
-         price_in_2020 = `2020`) %>% 
-  filter(!is.na(price_in_2020),
+         price_in_2020 = `2020`,
+         price_in_2021 = `2021`) %>% 
+  filter(!is.na(price_in_2021),
+    !is.na(price_in_2020),
          !is.na(price_in_2019),
          !is.na(price_in_2018),
          !is.na(price_in_2017)) %>% 
-  left_join(the_data[the_data$year == 2020,]) %>% 
+  left_join(the_data[the_data$year == 2021,]) %>% 
   select(-price, 
          -year,
          -name_for_matching) %>% 
@@ -37,13 +39,18 @@ product_in_all_years %>%
 product_in_all_years %>% 
   count(collection) 
 
-product_in_all_years$change <- product_in_all_years$price_in_2020/product_in_all_years$price_in_2017
+product_in_all_years$change <- product_in_all_years$price_in_2021/product_in_all_years$price_in_2017
 
 
 
 # Try some plots
 ggplot(data = the_data, aes(x = price)) +
   geom_histogram(binwidth = 1000) +
+  facet_wrap(vars(year), nrow = 2) +
+  theme_classic()
+
+ggplot(data = the_data, aes(x = log(price))) +
+  geom_histogram() +
   facet_wrap(vars(year), nrow = 2) +
   theme_classic()
 
@@ -72,7 +79,7 @@ the_data %>%
             minimum = min(price) %>% as.integer(),
             number = n()
             ) %>% 
-  filter(collection %in% c("Kimberley", "Lavalier", "Maxima", "Monsoon", "Rockpool", "Touchstone")) 
+  filter(collection %in% c("Dive", "Kimberley", "Lavalier", "Maxima", "Monsoon", "Rockpool", "Touchstone")) 
 
 the_data %>% 
   group_by(year, category) %>% 
